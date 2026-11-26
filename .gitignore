@@ -1,0 +1,25 @@
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment secrets
+.env
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# VS Code temporary files only; keep workspace settings trackable
+.vscode/*.log
+.vscode/*.tmp
+
+# Operating-system temporary files
+Thumbs.db
+.DS_Store
+
+# Local database backup; keep database/urlhaus.db trackable
+database/urlhaus_backup.db

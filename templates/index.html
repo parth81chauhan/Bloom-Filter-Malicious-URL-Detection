@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="BloomGuard local Bloom Filter dashboard for malicious URL membership checks and project analytics.">
+  <meta name="theme-color" content="#09111f">
+  <title>BloomGuard | Malicious URL Detection Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#overview" aria-label="BloomGuard overview">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M16 3 27 7v8c0 7.2-4.6 11.6-11 14-6.4-2.4-11-6.8-11-14V7l11-4Z" stroke="currentColor" stroke-width="1.8"/>
+          <path d="m10.5 16 3.6 3.6 7.7-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="brand-name">Bloom<span>Guard</span></span>
+    </a>
+
+    <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Open navigation">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="primary-nav" id="primary-nav" aria-label="Main navigation">
+      <a href="#overview">Overview</a>
+      <a href="#url-checker">URL Checker</a>
+      <a href="#analytics">Analytics</a>
+      <a href="#performance">Performance</a>
+      <a href="#about">About Project</a>
+    </nav>
+
+    <div class="header-status">
+      <span class="live-indicator" aria-hidden="true"></span>
+      Local analysis
+    </div>
+  </header>
+
+  <main>
+    <section class="hero section-anchor" id="overview">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-line"></span> CYBERSECURITY RESEARCH DASHBOARD</p>
+        <h1>Fast signals.<br><span>Smarter screening.</span></h1>
+        <p class="hero-description">
+          Explore how a Bloom Filter screens URL text against a known training
+          set — with transparent results, measured performance, and no outbound
+          requests.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#url-checker">
+            Run a local check
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a class="text-link" href="#analytics">Explore the analytics <span aria-hidden="true">↘</span></a>
+        </div>
+      </div>
+
+      <aside class="hero-panel" aria-label="Filter status">
+        <div class="panel-topline">
+          <span class="panel-kicker">FILTER STATUS</span>
+          {% if lookup_available %}
+          <span class="status-pill status-ready"><span></span> Ready</span>
+          {% else %}
+          <span class="status-pill status-unavailable"><span></span> Data unavailable</span>
+          {% endif %}
+        </div>
+        <div class="signal-visual" aria-hidden="true">
+          <span class="signal-ring ring-one"></span>
+          <span class="signal-ring ring-two"></span>
+          <span class="signal-ring ring-three"></span>
+          <span class="signal-core">
+            <svg viewBox="0 0 40 40" fill="none">
+              <path d="M20 4 33 9v9c0 8.5-5.5 13.8-13 17-7.5-3.2-13-8.5-13-17V9l13-5Z" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M14 20h12M20 14v12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="signal-node node-a"></span>
+          <span class="signal-node node-b"></span>
+          <span class="signal-node node-c"></span>
+        </div>
+        <div class="panel-caption">
+          <div>
+            <span class="panel-kicker">INSERTED ITEMS</span>
+            <strong>{{ "{:,}".format(stats.training_count) if stats.training_count is not none else "Unavailable" }}</strong>
+          </div>
+          <div class="panel-separator"></div>
+          <div>
+            <span class="panel-kicker">TARGET FP RATE</span>
+            <strong>{{ "%.2f"|format(stats.target_false_positive_rate) }}%</strong>
+          </div>
+        </div>
+        <p class="panel-footnote">SHA-256 double hashing <span aria-hidden="true">·</span> text-only lookup</p>
+      </aside>
+    </section>
+
+    {% if data_issues %}
+    <aside class="data-notices" aria-label="Data availability notices">
+      <div class="notice-icon" aria-hidden="true">i</div>
+      <div>
+        <strong>Some project data is unavailable</strong>
+        <ul>
+          {% for issue in data_issues %}
+          <li>{{ issue }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </aside>
+    {% endif %}
+
+    <section class="checker-section section-anchor" id="url-checker">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span> LIVE DEMONSTRATION</p>
+          <h2>Check URL text</h2>
+          <p class="section-description">A private, local lookup against the inserted training set.</p>
+        </div>
+        <div class="privacy-chip">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="8.5" width="12" height="9" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 8.5V6a3 3 0 0 1 6 0v2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          No URL is opened
+        </div>
+      </div>
+
+      <div class="checker-card">
+        <form action="{{ url_for('check_url') }}" method="post" id="url-check-form" novalidate>
+          <label for="url-input">URL or text to check</label>
+          <div class="url-input-row">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 22 22" fill="none"><circle cx="9.7" cy="9.7" r="6.2" stroke="currentColor" stroke-width="1.6"/><path d="m14.3 14.3 4.1 4.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </span>
+            <input
+              id="url-input"
+              name="url"
+              type="text"
+              maxlength="4096"
+              value="{{ entered_url }}"
+              placeholder="Paste or type URL text"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="url-hint character-count"
+              {% if not lookup_available %}disabled{% endif %}
+            >
+            <button class="button button-primary check-button" id="check-button" type="submit" {% if not lookup_available %}disabled{% endif %}>
+              <span class="button-label">Check URL</span>
+              <span class="button-spinner" id="button-spinner" aria-hidden="true"></span>
+              <svg class="button-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <div class="input-meta">
+            <span id="url-hint">Exact text is checked; leading and trailing spaces are trimmed.</span>
+            <span id="character-count" aria-live="polite">0 / 4096</span>
+          </div>
+          <p class="input-validation" id="input-validation" role="alert" hidden></p>
+        </form>
+
+        <div
+          class="result-card{% if feedback %} result-{{ feedback.kind }}{% endif %}"
+          id="url-result"
+          role="status"
+          aria-live="polite"
+          {% if not feedback %}hidden{% endif %}
+        >
+          <span class="result-symbol" id="result-symbol" aria-hidden="true">
+            {% if feedback and feedback.kind == "success" %}✓{% elif feedback and feedback.kind == "warning" %}?{% else %}!{% endif %}
+          </span>
+          <div class="result-copy">
+            <strong id="result-message">{{ feedback.message if feedback else "" }}</strong>
+            <p id="result-detail">{{ feedback.detail if feedback else "" }}</p>
+          </div>
+        </div>
+
+        <div class="result-guidance">
+          <span class="guidance-icon" aria-hidden="true">!</span>
+          <p><strong>How to read this:</strong> A positive result means “possibly present” only; false positives are possible and it does not confirm that a URL is malicious. A negative result means the exact text is definitely not in the inserted training set.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-section" aria-labelledby="stats-heading">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span> SYSTEM SNAPSHOT</p>
+          <h2 id="stats-heading">Filter at a glance</h2>
+        </div>
+        <span class="muted-caption">Values loaded from project data and live filter calculation</span>
+      </div>
+      <div class="stats-grid">
+        <article class="stat-card">
+          <span class="stat-icon icon-cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16M4 12h16M4 18.5h16M7 3v5M17 9.5v5M10 16v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </span>
+          <span class="stat-label">Training URLs</span>
+          <strong>{{ "{:,}".format(stats.training_count) if stats.training_count is not none else "Unavailable" }}</strong>
+          <span class="stat-detail">inserted into the Bloom Filter</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon icon-blue" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.2 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </span>
+          <span class="stat-label">Target false-positive rate</span>
+          <strong>{{ "%.2f"|format(stats.target_false_positive_rate) }}%</strong>
+          <span class="stat-detail">configured probability</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon icon-purple" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 6.5h14M5 12h14M5 17.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="6.5" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="11" cy="17.5" r="1.5" fill="currentColor"/></svg>
+          </span>
+          <span class="stat-label">Hash functions</span>
+          <strong>{{ stats.hash_count if stats.hash_count is not none else "Unavailable" }}</strong>
+          <span class="stat-detail">double-hash positions per lookup</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon icon-cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 9h.01M12 9h.01M16 9h.01M8 15h.01M12 15h.01M16 15h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+          </span>
+          <span class="stat-label">Filter size</span>
+          <strong>{{ "{:,}".format(stats.filter_size) if stats.filter_size is not none else "Unavailable" }}</strong>
+          <span class="stat-detail">bits in the bit array</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon icon-blue" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.5v17M16.5 7H9.8a3.3 3.3 0 0 0 0 6.6h4.4a3.3 3.3 0 0 1 0 6.6H7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </span>
+          <span class="stat-label">Memory usage</span>
+          <strong>{% if stats.memory_kb is not none %}{{ "%.2f"|format(stats.memory_kb) }} KB{% else %}Unavailable{% endif %}</strong>
+          <span class="stat-detail">Bloom Filter bit-array object</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon icon-purple" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 4.5h14v15H5z" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </span>
+          <span class="stat-label">Testing URLs</span>
+          <strong>{{ "{:,}".format(stats.testing_count) if stats.testing_count is not none else "Unavailable" }}</strong>
+          <span class="stat-detail">held-out evaluation records</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="analytics-section section-anchor" id="analytics">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span> MODEL ANALYTICS</p>
+          <h2>Accuracy, sizing &amp; configuration</h2>
+          <p class="section-description">Measured results from the project's false-positive and configuration experiments.</p>
+        </div>
+      </div>
+
+      <div class="analytics-kpis">
+        <article class="analytics-kpi">
+          <span class="kpi-label">Theoretical false-positive rate</span>
+          <strong>{% if stats.theoretical_rate is not none %}{{ "%.4f"|format(stats.theoretical_rate) }}%{% else %}Unavailable{% endif %}</strong>
+          <span class="kpi-footnote">Calculated Bloom Filter probability</span>
+        </article>
+        <article class="analytics-kpi kpi-highlight">
+          <span class="kpi-label">Observed false-positive rate</span>
+          <strong>{% if stats.observed_rate is not none %}{{ "%.4f"|format(stats.observed_rate) }}%{% else %}Unavailable{% endif %}</strong>
+          <span class="kpi-footnote">
+            {% if stats.testing_count is not none %}Measured against {{ "{:,}".format(stats.testing_count) }} held-out URLs{% else %}Evaluation data unavailable{% endif %}
+          </span>
+        </article>
+        <article class="analytics-kpi">
+          <span class="kpi-label">Active configuration</span>
+          <strong>{% if stats.hash_count is not none %}{{ stats.hash_count }} hashes{% else %}Unavailable{% endif %}</strong>
+          <span class="kpi-footnote">{% if stats.filter_size is not none %}{{ "{:,}".format(stats.filter_size) }} bit array{% else %}Filter configuration unavailable{% endif %}</span>
+        </article>
+      </div>
+
+      <div class="analytics-grid">
+        <article class="content-card memory-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">MEMORY PROFILE</p>
+              <h3>Space trade-off</h3>
+            </div>
+            <span class="card-badge">Actual project data</span>
+          </div>
+          {% if memory_comparison %}
+          <div class="memory-chart" role="img" aria-label="Memory and storage comparison based on the project's loaded URLs">
+            {% for item in memory_comparison %}
+            <div class="memory-row">
+              <div class="memory-label">
+                <span>{{ item.label }}</span>
+                <strong>{{ "%.2f"|format(item.value_kb) }} KB</strong>
+              </div>
+              <div class="bar-track memory-track">
+                <span class="bar memory-bar memory-{{ item.kind }}" style="width: {{ '%.2f'|format(item.width) }}%"></span>
+              </div>
+              <span class="memory-note">{{ item.note }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          <p class="chart-footnote">Bloom Filter and Python Set are in-memory estimates; SQLite is on-disk database size, so these measurements are not identical resource types.</p>
+          {% else %}
+          <p class="empty-state">Memory comparison is unavailable until the training dataset is restored.</p>
+          {% endif %}
+        </article>
+
+        <article class="content-card configuration-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">FALSE-POSITIVE STUDY</p>
+              <h3>Configuration comparison</h3>
+            </div>
+            <span class="card-badge">CSV results</span>
+          </div>
+          {% if configurations %}
+          <div class="configuration-legend">
+            <span><i class="legend-dot theoretical-dot"></i>Theoretical</span>
+            <span><i class="legend-dot observed-dot"></i>Observed</span>
+          </div>
+          <div class="configuration-list">
+            {% for row in configurations %}
+            <div class="configuration-row">
+              <div class="configuration-meta">
+                <strong>{{ "%.1f"|format(row.target) }}% target</strong>
+                <span>{{ row.hashes }} hashes <b>·</b> {{ "%.2f"|format(row.memory_kb) }} KB</span>
+              </div>
+              <div class="configuration-bars" aria-label="Theoretical {{ '%.4f'|format(row.theoretical) }} percent, observed {{ '%.4f'|format(row.observed) }} percent">
+                <div class="mini-track"><span class="mini-bar theoretical-bar" style="width: {{ '%.2f'|format(row.theoretical_width) }}%"></span></div>
+                <div class="mini-track"><span class="mini-bar observed-bar" style="width: {{ '%.2f'|format(row.observed_width) }}%"></span></div>
+              </div>
+              <div class="configuration-values">
+                <span>{{ "%.4f"|format(row.theoretical) }}%</span>
+                <span>{{ "%.4f"|format(row.observed) }}%</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty-state">Configuration comparison is unavailable because its results file could not be read.</p>
+          {% endif %}
+        </article>
+      </div>
+
+      {% if configurations %}
+      <div class="table-wrap configuration-table-wrap">
+        <table>
+          <caption>Configuration experiment results</caption>
+          <thead>
+            <tr>
+              <th scope="col">Target FP rate</th>
+              <th scope="col">Filter bits</th>
+              <th scope="col">Hash functions</th>
+              <th scope="col">Memory (KB)</th>
+              <th scope="col">Theoretical FP</th>
+              <th scope="col">Observed FP</th>
+              <th scope="col">False positives</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in configurations %}
+            <tr{% if row.target == 1.0 %} class="active-configuration"{% endif %}>
+              <td>{{ "%.1f"|format(row.target) }}%</td>
+              <td>{{ "{:,}".format(row.bits) }}</td>
+              <td>{{ row.hashes }}</td>
+              <td>{{ "%.2f"|format(row.memory_kb) }}</td>
+              <td>{{ "%.4f"|format(row.theoretical) }}%</td>
+              <td>{{ "%.4f"|format(row.observed) }}%</td>
+              <td>{{ "{:,}".format(row.false_positives) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="performance-section section-anchor" id="performance">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span> LOOKUP BENCHMARK</p>
+          <h2>Performance comparison</h2>
+          <p class="section-description">Median lookup time per URL, measured by the existing project benchmark.</p>
+        </div>
+        <span class="unit-chip">Milliseconds per lookup</span>
+      </div>
+
+      {% if benchmark_results %}
+      <div class="performance-charts">
+        <article class="content-card benchmark-chart-card">
+          <div class="chart-title">
+            <span class="chart-icon chart-icon-blue" aria-hidden="true">↗</span>
+            <div><h3>Existing URL Lookup</h3><p>Lookup for an inserted URL</p></div>
+          </div>
+          <div class="horizontal-chart" role="img" aria-label="Existing URL lookup times in milliseconds">
+            {% for row in benchmark_results %}
+            <div class="benchmark-bar-row">
+              <span class="bar-name">{{ row.method }}</span>
+              <div class="bar-track"><span class="bar existing-bar" style="width: {{ '%.2f'|format(row.existing_width) }}%"></span></div>
+              <strong class="bar-value">{{ "%.6f"|format(row.existing_ms) }}</strong>
+            </div>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="content-card benchmark-chart-card">
+          <div class="chart-title">
+            <span class="chart-icon chart-icon-purple" aria-hidden="true">↘</span>
+            <div><h3>Absent URL Lookup</h3><p>Lookup for an uninserted URL</p></div>
+          </div>
+          <div class="horizontal-chart" role="img" aria-label="Absent URL lookup times in milliseconds">
+            {% for row in benchmark_results %}
+            <div class="benchmark-bar-row">
+              <span class="bar-name">{{ row.method }}</span>
+              <div class="bar-track"><span class="bar absent-bar" style="width: {{ '%.2f'|format(row.absent_width) }}%"></span></div>
+              <strong class="bar-value">{{ "%.6f"|format(row.absent_ms) }}</strong>
+            </div>
+            {% endfor %}
+          </div>
+        </article>
+      </div>
+
+      <div class="table-wrap benchmark-table-wrap">
+        <table>
+          <caption>Exact benchmark values</caption>
+          <thead>
+            <tr>
+              <th scope="col">Algorithm</th>
+              <th scope="col">Existing URL Lookup (ms)</th>
+              <th scope="col">Absent URL Lookup (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in benchmark_results %}
+            <tr{% if row.method == "Bloom Filter" %} class="active-configuration"{% endif %}>
+              <td>{{ row.method }}</td>
+              <td>{{ "%.6f"|format(row.existing_ms) }}</td>
+              <td>{{ "%.6f"|format(row.absent_ms) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if best_existing and best_absent %}
+      <p class="performance-insight">
+        <span class="insight-mark" aria-hidden="true">i</span>
+        In these measurements, <strong>{{ best_existing }}</strong> had the lowest existing-URL time and
+        <strong>{{ best_absent }}</strong> had the lowest absent-URL time. The Bloom Filter's trade-off is its
+        much smaller memory footprint than the Python Set, not being the fastest in this benchmark.
+      </p>
+      {% endif %}
+      <p class="chart-footnote">Each chart is scaled independently; use the displayed values for exact comparisons. Measurements vary by machine and run.</p>
+      {% else %}
+      <div class="content-card empty-state">Benchmark visualization is unavailable because data/benchmark_results.csv could not be read.</div>
+      {% endif %}
+    </section>
+
+    <section class="about-section section-anchor" id="about">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span> PROJECT NOTES</p>
+          <h2>About the Bloom Filter</h2>
+          <p class="section-description">A compact first-pass membership screen for a large URL set.</p>
+        </div>
+      </div>
+
+      <div class="about-intro-grid">
+        <article class="content-card about-definition">
+          <span class="definition-icon" aria-hidden="true">
+            <svg viewBox="0 0 28 28" fill="none"><path d="M14 3 24 7v7c0 6.5-4.2 10.4-10 13-5.8-2.6-10-6.5-10-13V7l10-4Z" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="13" r="1.3" fill="currentColor"/><circle cx="14" cy="13" r="1.3" fill="currentColor"/><circle cx="18" cy="13" r="1.3" fill="currentColor"/><path d="M10 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          <h3>What is a Bloom Filter?</h3>
+          <p>A Bloom Filter is a space-efficient probabilistic data structure for testing set membership. It can say an item is definitely absent or possibly present; it does not store the original URLs or support direct deletion.</p>
+          <h3>Why use it for URL screening?</h3>
+          <p>It provides a compact first-pass check across many known URL strings. A downstream system can use a possible match to decide whether to perform a separate, exact investigation.</p>
+        </article>
+
+        <article class="content-card process-card">
+          <div class="card-heading">
+            <div><p class="eyebrow">LOOKUP FLOW</p><h3>From text to signal</h3></div>
+            <span class="card-badge">Local only</span>
+          </div>
+          <ol class="process-flow">
+            <li>
+              <span class="process-number">01</span>
+              <span class="process-icon" aria-hidden="true">Aa</span>
+              <span class="process-copy"><strong>URL text</strong><small>Input is treated as text</small></span>
+            </li>
+            <li>
+              <span class="process-number">02</span>
+              <span class="process-icon process-icon-cyan" aria-hidden="true">#</span>
+              <span class="process-copy"><strong>Hash positions</strong><small>SHA-256 double hashing</small></span>
+            </li>
+            <li>
+              <span class="process-number">03</span>
+              <span class="process-icon process-icon-purple" aria-hidden="true">101</span>
+              <span class="process-copy"><strong>Bit-array check</strong><small>Check each selected bit</small></span>
+            </li>
+            <li>
+              <span class="process-number">04</span>
+              <span class="process-icon process-icon-result" aria-hidden="true">✓</span>
+              <span class="process-copy"><strong>Membership signal</strong><small>Definitely absent or possibly present</small></span>
+            </li>
+          </ol>
+        </article>
+      </div>
+
+      <div class="about-details-grid">
+        <article class="content-card detail-card">
+          <h3>Understanding false positives</h3>
+          <p>A false positive happens when all checked bits are set by other inserted items, so a not-inserted string appears possibly present. The configured 1% is a target probability, not a per-query guarantee; actual results depend on the filter and tested data.</p>
+        </article>
+        <article class="content-card detail-card">
+          <h3>Advantages</h3>
+          <ul class="check-list">
+            <li>Compact bit-array representation</li>
+            <li>Fast membership checks with fixed work per lookup</li>
+            <li>A negative result is definitive for the inserted set</li>
+          </ul>
+        </article>
+        <article class="content-card detail-card">
+          <h3>Limitations</h3>
+          <ul class="limit-list">
+            <li>Positive results may be false positives</li>
+            <li>Inserted URLs cannot be reconstructed from the filter</li>
+            <li>Standard Bloom Filters do not support deletion</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="technology-row">
+        <span class="technology-label">Built with</span>
+        <span class="technology-chip">Python</span>
+        <span class="technology-chip">Flask</span>
+        <span class="technology-chip">HTML</span>
+        <span class="technology-chip">CSS</span>
+        <span class="technology-chip">JavaScript</span>
+        <span class="technology-chip">SQLite</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="brand footer-brand" href="#overview">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none"><path d="M16 3 27 7v8c0 7.2-4.6 11.6-11 14-6.4-2.4-11-6.8-11-14V7l11-4Z" stroke="currentColor" stroke-width="1.8"/><path d="m10.5 16 3.6 3.6 7.7-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="brand-name">Bloom<span>Guard</span></span>
+    </a>
+    <div class="footer-copy">
+      <strong>BloomGuard <span aria-hidden="true">|</span> Bloom Filter for Malicious URL Detection</strong>
+      <p>Academic Project <span aria-hidden="true">|</span> B.Tech Computer Science and Engineering</p>
+    </div>
+    <a class="back-to-top" href="#overview">Back to top <span aria-hidden="true">↑</span></a>
+  </footer>
+</body>
+</html>

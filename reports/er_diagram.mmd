@@ -1,0 +1,15 @@
+%% Bloom Filter for Malicious URL Detection
+%% Chen-style entity with attribute ovals; no relationships exist in the schema.
+%%{init: {"theme":"base","themeVariables":{"background":"#101820","primaryColor":"#ffffff","primaryTextColor":"#101820","primaryBorderColor":"#ffffff","lineColor":"#ffffff"}}}%%
+flowchart TB
+    ID(["<u>id</u><br/>INTEGER<br/>PRIMARY KEY<br/>AUTOINCREMENT"])
+    URLS["urls"]
+    URL(["url<br/>TEXT<br/>NOT NULL<br/>UNIQUE"])
+    ID --- URLS
+    URL --- URLS
+
+    classDef entity fill:#ffffff,stroke:#ffffff,stroke-width:2px,color:#101820
+    classDef attribute fill:#ffffff,stroke:#ffffff,stroke-width:2px,color:#101820
+    class URLS entity
+    class ID,URL attribute
+    linkStyle 0,1 stroke:#ffffff,stroke-width:1.5px
